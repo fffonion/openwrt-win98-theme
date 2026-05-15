@@ -1,0 +1,72 @@
+name: Build IPK
+
+on:
+  push:
+    branches:
+      - "main"
+      - "master"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and release luci-theme-win98
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Build and publish release for each commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t shas < <(python - <<'PY'
+          import json
+          import os
+
+          event_path = os.environ["GITHUB_EVENT_PATH"]
+          with open(event_path, "r", encoding="utf-8") as fh:
+              event = json.load(fh)
+
+          for commit in event.get("commits", []):
+              sha = commit.get("id")
+              if sha:
+                  print(sha)
+          PY
+          )
+
+          if [ "${#shas[@]}" -eq 0 ]; then
+            shas=("${GITHUB_SHA}")
+          fi
+
+          for sha in "${shas[@]}"; do
+            git checkout --force "$sha"
+
+            short_sha="${sha:0:12}"
+            tag="ipk-${short_sha}"
+            out="dist/luci-theme-win98-${short_sha}.ipk"
+
+            python scripts/build_ipk.py --out "$out"
+
+            if gh release view "$tag" >/dev/null 2>&1; then
+              gh release upload "$tag" "$out" --clobber
+            else
+              gh release create "$tag" "$out" \
+                --target "$sha" \
+                --title "luci-theme-win98 ${short_sha}" \
+                --notes "Automated IPK build for commit ${sha}." \
+                --latest=false
+            fi
+          done
