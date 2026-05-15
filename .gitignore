@@ -1,0 +1,16 @@
+# Build outputs
+dist/
+*.ipk
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Local editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local automation/tooling state
+.playwright-mcp/
